@@ -71,7 +71,7 @@ server.tool(
 - **替代 ChatGPT**：你的目标是生成比 ChatGPT o3/o3-pro 更好、更专业的结构化提示词。
 `;
     return {
-      content: [{ type: "text", text: `【Question Refiner 已激活】\n输入问题: ${question}` }]
+      content: [{ type: "text", text: `【Question Refiner 已激活】\n输入问题: ${question}\n\n指令指引:\n${skillInstructions}` }]
     };
   }
 );
@@ -115,7 +115,7 @@ server.tool(
 **执行时请保持精准、诚信和彻底。**
 `;
     return {
-      content: [{ type: "text", text: `【Research Executor】正在执行: ${topic}` }]
+      content: [{ type: "text", text: `【Research Executor】正在执行: ${topic}\n\n【执行指令指引】:\n${skillInstructions}` }]
     };
   }
 );
@@ -174,7 +174,7 @@ server.tool(
 **记住：你是研究的导演，决定哪些思路值得继续，哪些应该被终结。**
 `;
     return {
-      content: [{ type: "text", text: `【GoT 控制器】已接收上下文，策略指引已就绪。` }]
+      content: [{ type: "text", text: `【GoT 控制器】已接收上下文，策略指引已就绪。\n当前上下文预览: ${String(question).substring(0, 50)}\n\n策略指引:\n${skillInstructions}` }]
     };
   }
 );
@@ -223,7 +223,7 @@ server.tool(
 **记住：好的综合（Good Synthesis）是告诉用户“研究说了什么，意味着什么，以及你应该做什么”；而差的综合只是简单的罗列。请成为前者。**
 `;
     return {
-      content: [{ type: "text", text: `【Synthesizer】处理数据量: ${data?.length || 0} 字符` }]
+      content: [{ type: "text", text: `【Synthesizer】处理数据量: ${data?.length || 0} 字符\n\n综合指引:\n${skillInstructions}` }]
     };
   }
 );
@@ -264,7 +264,7 @@ server.tool(
 **记住：你是对抗错误信息和 AI 幻觉的最后一道防线。绝不在引文质量上妥协，一个有据可查的主张胜过一万句空洞的断言。**
 `;
     return {
-      content: [{ type: "text", text: `【Citation Validator】核查开始，报告长度: ${report?.length || 0}` }]
+      content: [{ type: "text", text: `【Citation Validator】核查开始，报告长度: ${report?.length || 0}\n\n验证指引:\n${skillInstructions}` }]
     };
   }
 );
