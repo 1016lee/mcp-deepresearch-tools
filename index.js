@@ -112,6 +112,11 @@ server.tool(
 - 矛盾点必须被明确指出并解释。
 - 产出必须具有专业分析师的水准。
 
+## 立即执行动作
+1. 确认已接收研究主题： "${topic}"。
+2. 立即输出 **Phase 2: 检索规划** 的详细拆解。
+3. 请列出你准备为这个主题分配的 3 个不同角色的 Agent 名字及其具体搜索任务。
+
 **执行时请保持精准、诚信和彻底。**
 `;
     return {
@@ -153,7 +158,7 @@ server.tool(
 ### 模式 B: 深度优先
 - 针对特定高价值环节进行连续 Generate 和 KeepBestN(1)，直到挖掘到核心。
 
-## 决策逻辑 (当前上下文: ${question})
+## 决策逻辑 (当前上下文: ${question.substring(0, 500)})
 - **Generate**: 阈值 分数 ≥ 7.0
 - **Refine**: 阈值 分数 ≥ 6.0
 - **Prune (修剪)**: 分数 < 6.0 或内容冗余
@@ -161,10 +166,29 @@ server.tool(
 ## 状态管理
 请维护以下格式的图状态：
 
-### GoT Graph State
-| Node ID | Content Summary | Score | Parent | Status |
-|---------|----------------|-------|--------|--------|
-| root    | ${question}... | - | - | complete |
+## ⚠️ 立即执行动作
+1. **初始化图状态**：请立即根据当前上下文 "${question.substring(0, 50)}..." 初始化并显示 **GoT Graph State** 表格。
+2. **动态生成维度**：执行 **Generate(3)**，用三个互补且具有深度研究价值的维度替换 N1-N3 的占位符。
+3. **强制打分与决策**：根据“模式 A：平衡探索”对 N1-N3 进行评分，并明确标记哪个路径被 Keep（保留），哪个被 Prune（修剪）。
+4. **严格格式输出**：请必须按照以下 Markdown 模板输出，不得省略。
+
+##  强制输出格式要求
+请**必须**按照以下顺序输出结果，不得跳过任何部分：
+
+### 1. 战略分析报告
+[在此处输出你刚才生成的“关键冲突与协同分析”表格，包含维度交叉、核心冲突、协同机会]
+
+### 2. GoT Graph State (决策层)
+| Node ID | Path Description | Score (0-10) | Parent | Decision |
+|---------|------------------|--------------|--------|----------|
+| root    | ${question.substring(0, 50)}... | 10           | -      | complete |
+| N1      | [由 AI 根据上下文生成的路径 A] | [请打分]      | root   | [Keep/Prune] |
+| N2      | [由 AI 根据上下文生成的路径 B] | [请打分]      | root   | [Keep/Prune] |
+| N3      | [由 AI 根据上下文生成的路径 C] | [请打分]      | root   | [Keep/Prune] |
+
+### 3. 导演决策逻辑
+- **本轮胜出路径**: [指出哪个 Node 分数最高]
+- **下一步指令**: 请调用 synthesizer 工具针对胜出路径进行总结。
 
 ## Best Practices
 - **积极修剪**: 评分低于 6.0 的节点应立即放弃。
@@ -174,7 +198,7 @@ server.tool(
 **记住：你是研究的导演，决定哪些思路值得继续，哪些应该被终结。**
 `;
     return {
-      content: [{ type: "text", text: `【GoT 控制器】已接收上下文，策略指引已就绪。\n当前上下文预览: ${String(question).substring(0, 50)}\n\n策略指引:\n${skillInstructions}` }]
+      content: [{ type: "text", text: `【GoT 控制器】已接收上下文，策略指引已就绪。\n当前上下文预览: ${question.substring(0, 50)}\n\n策略指引:\n${skillInstructions}` }]
     };
   }
 );
