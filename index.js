@@ -295,42 +295,42 @@ server.tool(
 
 // --- Express SSE 逻辑 (修复点 2: 结构化传输处理) ---
 const app = express();
-let transport = null; 
+//let transport = null; 
 
 app.get("/sse", async (req, res) => {
-  console.log("🚀 SSE 连接初始化 (针对 iOS 增强版)...");
+  console.log("🚀 SSE 连接初始化...");
 
-  // 1. 设置严格的 SSE 响应头
+  // 1. 必须先设置 Header
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform', // 严禁 iOS 和 Render 网关缓存数据
+    'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no', // 关键：禁用 Render 负载均衡器的缓冲
-    'Access-Control-Allow-Origin': '*' // 跨域增强
+    'X-Accel-Buffering': 'no'
   });
 
-  // 2. 写入 2KB 填充数据 (Padding)
-  // iOS 必须接收到足够多的初始字节才会开始解析 EventStream
+  // 2. 写入 Padding 解决 iOS 缓存
   res.write(': ' + ' '.repeat(2048) + '\n\n');
 
-  // 3. 立即刷新缓冲区
-  // 某些版本的 express 需要显式 flush
-  if (res.flush) res.flush();
-
-  // 4. 创建传输实例
-  transport = new SSEServerTransport("/messages", res);
+  // 3. 创建传输实例
+  const newTransport = new SSEServerTransport("/messages", res);
   
-  // 5. 绑定 server
-  await server.connect(transport);
+  // 4. 【关键修改】不要立刻把全局 transport 设为 null
+  // 如果你想支持多端，这里最好用 sessionId。如果自用，请确保不要同时连两台。
+  transport = newTransport;
 
-  console.log("✅ SSE 传输已绑定");
+  // 5. 先建立连接
+  await server.connect(newTransport);
+  console.log("✅ MCP Server 已连接到 Transport");
 
-  // 监听断开
+  // 6. 监听关闭：仅在当前请求结束时清理
   req.on('close', () => {
-    console.log("🔌 客户端连接断开");
-    transport = null;
+    console.log("🔌 客户端主动断开连接");
+    if (transport === newTransport) {
+      transport = null; 
+    }
   });
 });
+
 
 // 使用 express.json() 处理 POST 请求，这是标准的做法
 app.post("/messages", express.json(), async (req, res) => {
