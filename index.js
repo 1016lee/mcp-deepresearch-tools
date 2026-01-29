@@ -298,9 +298,38 @@ const app = express();
 let transport = null; 
 
 app.get("/sse", async (req, res) => {
-  console.log("🚀 SSE 连接初始化...");
+  console.log("🚀 SSE 连接初始化 (针对 iOS 增强版)...");
+
+  // 1. 设置严格的 SSE 响应头
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform', // 严禁 iOS 和 Render 网关缓存数据
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no', // 关键：禁用 Render 负载均衡器的缓冲
+    'Access-Control-Allow-Origin': '*' // 跨域增强
+  });
+
+  // 2. 写入 2KB 填充数据 (Padding)
+  // iOS 必须接收到足够多的初始字节才会开始解析 EventStream
+  res.write(': ' + ' '.repeat(2048) + '\n\n');
+
+  // 3. 立即刷新缓冲区
+  // 某些版本的 express 需要显式 flush
+  if (res.flush) res.flush();
+
+  // 4. 创建传输实例
   transport = new SSEServerTransport("/messages", res);
+  
+  // 5. 绑定 server
   await server.connect(transport);
+
+  console.log("✅ SSE 传输已绑定");
+
+  // 监听断开
+  req.on('close', () => {
+    console.log("🔌 客户端连接断开");
+    transport = null;
+  });
 });
 
 // 使用 express.json() 处理 POST 请求，这是标准的做法
