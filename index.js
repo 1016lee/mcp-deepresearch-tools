@@ -301,58 +301,47 @@ const app = express();
 const transports = new Map(); 
 
 app.get("/sse", async (req, res) => {
-  // 为每个新连接生成唯一 ID (也可以从 query 获取)
   const sessionId = Math.random().toString(36).substring(7);
   console.log(`🚀 SSE 连接初始化... ID: ${sessionId}`);
 
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache, no-transform',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no'
-  });
-
-  res.write(': ' + ' '.repeat(2048) + '\n\n');
-
-  // 2. 将 sessionId 传递给传输实例 (由 SDK 内部匹配 /messages)
+  // 1. 创建传输实例，但不手动写 res.writeHead
   const newTransport = new SSEServerTransport("/messages", res);
   
-  // 3. 存入 Map
+  // 2. 将连接存入 Map（用于多设备支持）
   transports.set(sessionId, newTransport);
 
+  // 3. 启动连接
+  // SDK 内部会自动执行 res.writeHead(200, { 'Content-Type': 'text/event-stream', ... })
   await server.connect(newTransport);
-  console.log(`✅ MCP Server 已连接到 Transport [${sessionId}]`);
 
-  // 4. 断开时清理，防止内存溢出和冲突
+  // 4. 【关键：解决 iOS 缓存】在 SDK 写完 Header 后，立即补发 Padding
+  // 由于 SSE 是流式传输，我们可以继续往 res 里写注释
+  res.write(': ' + ' '.repeat(2048) + '\n\n');
+  
+  // 如果你的 express 使用了压缩中间件，强制刷新
+  if (res.flush) res.flush();
+
+  console.log(`✅ MCP Server 已连接 [${sessionId}]`);
+
   req.on('close', () => {
     console.log(`🔌 连接断开: ${sessionId}`);
     transports.delete(sessionId);
   });
 });
 
-// 5. 修改 POST 路由以匹配正确的设备
 app.post("/messages", express.json(), async (req, res) => {
-  // 从 query 参数中获取 sessionId (取决于 Kelivo 的实现)
-  // 或者尝试处理所有活跃的 transports (简单自用方案)
-  const sessionId = req.query.sessionId; 
-  const targetTransport = sessionId ? transports.get(sessionId) : Array.from(transports.values())[0];
+  // 尝试从所有活跃连接中找到能处理此消息的 transport
+  // 简单自用场景下，取 Map 中的最后一个或匹配 sessionId
+  const transportList = Array.from(transports.values());
+  const currentTransport = transportList[transportList.length - 1];
 
-  if (targetTransport) {
-    await targetTransport.handlePostMessage(req, res, req.body);
+  if (currentTransport) {
+    await currentTransport.handlePostMessage(req, res, req.body);
   } else {
-    res.status(400).send("No active session found.");
+    res.status(400).send("No active SSE session.");
   }
 });
 
-
-// 使用 express.json() 处理 POST 请求，这是标准的做法
-app.post("/messages", express.json(), async (req, res) => {
-  if (!transport) {
-    return res.status(400).send("Session not initialized. Please connect via SSE first.");
-  }
-  console.log("📥 收到消息类型:", req.body?.method);
-  await transport.handlePostMessage(req, res, req.body);
-});
 
 const PORT = process.env.PORT || 10000;
 app.listen(PORT, "0.0.0.0", () => {
