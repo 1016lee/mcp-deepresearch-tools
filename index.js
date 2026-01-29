@@ -297,10 +297,14 @@ server.tool(
 const app = express();
 //let transport = null; 
 
-app.get("/sse", async (req, res) => {
-  console.log("🚀 SSE 连接初始化...");
+// 1. 使用 Map 存储多个连接，而不是单个变量
+const transports = new Map(); 
 
-  // 1. 必须先设置 Header
+app.get("/sse", async (req, res) => {
+  // 为每个新连接生成唯一 ID (也可以从 query 获取)
+  const sessionId = Math.random().toString(36).substring(7);
+  console.log(`🚀 SSE 连接初始化... ID: ${sessionId}`);
+
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
@@ -308,27 +312,36 @@ app.get("/sse", async (req, res) => {
     'X-Accel-Buffering': 'no'
   });
 
-  // 2. 写入 Padding 解决 iOS 缓存
   res.write(': ' + ' '.repeat(2048) + '\n\n');
 
-  // 3. 创建传输实例
+  // 2. 将 sessionId 传递给传输实例 (由 SDK 内部匹配 /messages)
   const newTransport = new SSEServerTransport("/messages", res);
   
-  // 4. 【关键修改】不要立刻把全局 transport 设为 null
-  // 如果你想支持多端，这里最好用 sessionId。如果自用，请确保不要同时连两台。
-  transport = newTransport;
+  // 3. 存入 Map
+  transports.set(sessionId, newTransport);
 
-  // 5. 先建立连接
   await server.connect(newTransport);
-  console.log("✅ MCP Server 已连接到 Transport");
+  console.log(`✅ MCP Server 已连接到 Transport [${sessionId}]`);
 
-  // 6. 监听关闭：仅在当前请求结束时清理
+  // 4. 断开时清理，防止内存溢出和冲突
   req.on('close', () => {
-    console.log("🔌 客户端主动断开连接");
-    if (transport === newTransport) {
-      transport = null; 
-    }
+    console.log(`🔌 连接断开: ${sessionId}`);
+    transports.delete(sessionId);
   });
+});
+
+// 5. 修改 POST 路由以匹配正确的设备
+app.post("/messages", express.json(), async (req, res) => {
+  // 从 query 参数中获取 sessionId (取决于 Kelivo 的实现)
+  // 或者尝试处理所有活跃的 transports (简单自用方案)
+  const sessionId = req.query.sessionId; 
+  const targetTransport = sessionId ? transports.get(sessionId) : Array.from(transports.values())[0];
+
+  if (targetTransport) {
+    await targetTransport.handlePostMessage(req, res, req.body);
+  } else {
+    res.status(400).send("No active session found.");
+  }
 });
 
 
